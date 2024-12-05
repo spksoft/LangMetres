@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "langmetres"
+version = "0.1.0-alpha.1"
+description = "Large Language Model Evaluation Tool"
+authors = ["Sippakorn Raksakiart <spkrsk.37@gmail.com>"]
+packages = [
+    { include = "app" }
+]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+litellm = "^1.53.7"
+uvicorn = "^0.32.1"
+pydantic = "^2.10.3"
+fastapi = "^0.115.6"
+
+[tool.poetry.group.dev.dependencies]
+watchfiles = "^0.21.0"
+
+[tool.poetry.scripts]
+start = "app.__main__:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
