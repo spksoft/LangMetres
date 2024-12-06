@@ -7,20 +7,37 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2 } from "lucide-react"
+import { Loader2, Eye, FileText } from "lucide-react"
 import ReactMarkdown from 'react-markdown'
+
+interface ResponseMetrics {
+  response_content: string;
+  model_name: string;
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    cost: number;
+  };
+}
 
 interface TestCase {
   prompt: string;
-  responses: Record<string, string>;
+  responses: Record<string, ResponseMetrics>;
   loading?: boolean;
+  viewMode?: Record<string, 'markdown' | 'raw'>;
 }
 
 export default function Home() {
   const { toast } = useToast()
   const [envVars, setEnvVars] = useState("")
   const [selectedModels, setSelectedModels] = useState<string[]>([])
-  const [testCases, setTestCases] = useState<TestCase[]>([{ prompt: "", responses: {}, loading: false }])
+  const [testCases, setTestCases] = useState<TestCase[]>([{ 
+    prompt: "", 
+    responses: {}, 
+    loading: false,
+    viewMode: {} 
+  }])
   const [isUpdatingEnv, setIsUpdatingEnv] = useState(false)
   
   const handleUpdateEnv = async () => {
@@ -55,15 +72,14 @@ export default function Home() {
   }
 
   const handleAddTestCase = () => {
-    setTestCases([...testCases, { prompt: "", responses: {}, loading: false }])
+    setTestCases([...testCases, { prompt: "", responses: {}, loading: false, viewMode: {} }])
   }
 
   const handleRunTest = async (index: number) => {
     const testCase = testCases[index]
-    const newResponses: Record<string, string> = {}
+    const newResponses: Record<string, ResponseMetrics> = {}
     
     try {
-      // Set loading state for this test case
       const updatedTestCases = [...testCases]
       updatedTestCases[index].loading = true
       setTestCases(updatedTestCases)
@@ -76,11 +92,15 @@ export default function Home() {
             body: JSON.stringify({ user_prompt: testCase.prompt })
           })
           const data = await res.json()
-          newResponses[model] = data.response.response_content
+          newResponses[model] = data.response
         } catch (error) {
-          newResponses[model] = error instanceof Error ? 
-            `Error: ${error.message}` : 
-            "Error: Failed to get response"
+          newResponses[model] = {
+            response_content: error instanceof Error ? 
+              `Error: ${error.message}` : 
+              "Error: Failed to get response",
+            model_name: model,
+            usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost: 0 }
+          }
         }
       }
 
@@ -103,6 +123,16 @@ export default function Home() {
       updatedTestCases[index].loading = false
       setTestCases(updatedTestCases)
     }
+  }
+
+  const toggleView = (testCaseIndex: number, model: string) => {
+    const updatedTestCases = [...testCases]
+    const currentMode = updatedTestCases[testCaseIndex].viewMode?.[model] || 'markdown'
+    updatedTestCases[testCaseIndex].viewMode = {
+      ...updatedTestCases[testCaseIndex].viewMode,
+      [model]: currentMode === 'markdown' ? 'raw' : 'markdown'
+    }
+    setTestCases(updatedTestCases)
   }
 
   return (
@@ -187,7 +217,7 @@ export default function Home() {
 
               <div className="space-y-4">
                 {testCases.map((testCase, index) => (
-                  <Card key={index}>
+                  <Card key={index} className="w-full">
                     <CardContent className="pt-6 space-y-4">
                       <Textarea
                         value={testCase.prompt}
@@ -211,18 +241,51 @@ export default function Home() {
                           "Run Test"
                         )}
                       </Button>
-                      {Object.entries(testCase.responses as Record<string, string>).map(([model, response]) => (
-                        <Card key={model}>
-                          <CardHeader>
-                            <CardTitle className="text-sm">{model}</CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="prose prose-sm dark:prose-invert max-w-none">
-                              <ReactMarkdown>{response}</ReactMarkdown>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {Object.entries(testCase.responses as Record<string, ResponseMetrics>).map(([model, response]) => (
+                          <Card key={model} className="h-full">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-sm flex items-center justify-between">
+                                <span>{model}</span>
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6"
+                                    onClick={() => toggleView(index, model)}
+                                  >
+                                    {testCase.viewMode?.[model] === 'raw' ? (
+                                      <FileText className="h-4 w-4" />
+                                    ) : (
+                                      <Eye className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                  <span className="text-xs text-muted-foreground">
+                                    ${response.usage.cost.toFixed(4)}
+                                  </span>
+                                </div>
+                              </CardTitle>
+                              <div className="text-xs text-muted-foreground flex flex-col">
+                                <span>Prompt Tokens: {response.usage.prompt_tokens}</span>
+                                <span>Completion Tokens: {response.usage.completion_tokens}</span>
+                                <span>Total Tokens: {response.usage.total_tokens}</span>
+                              </div>
+                            </CardHeader>
+                            <CardContent className="h-[500px] overflow-y-auto">
+                              <p>Response: </p>
+                              {testCase.viewMode?.[model] === 'raw' ? (
+                                <pre className="whitespace-pre-wrap font-mono text-sm">
+                                  {response.response_content}
+                                </pre>
+                              ) : (
+                                <div className="prose prose-sm dark:prose-invert max-w-none">
+                                  <ReactMarkdown>{response.response_content}</ReactMarkdown>
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
                     </CardContent>
                   </Card>
                 ))}
