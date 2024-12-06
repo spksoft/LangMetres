@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2 } from "lucide-react"
+import ReactMarkdown from 'react-markdown'
 
 interface TestCase {
   prompt: string;
@@ -216,7 +217,9 @@ export default function Home() {
                             <CardTitle className="text-sm">{model}</CardTitle>
                           </CardHeader>
                           <CardContent>
-                            <p className="whitespace-pre-wrap">{response}</p>
+                            <div className="prose prose-sm dark:prose-invert max-w-none">
+                              <ReactMarkdown>{response}</ReactMarkdown>
+                            </div>
                           </CardContent>
                         </Card>
                       ))}
