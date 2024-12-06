@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, Eye, FileText } from "lucide-react"
 import ReactMarkdown from 'react-markdown'
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 
 interface ResponseMetrics {
   response_content: string;
@@ -31,6 +33,7 @@ interface TestCase {
 export default function Home() {
   const { toast } = useToast()
   const [envVars, setEnvVars] = useState("")
+  const [saveToStorage, setSaveToStorage] = useState(false)
   const [selectedModels, setSelectedModels] = useState<string[]>([])
   const [testCases, setTestCases] = useState<TestCase[]>([{ 
     prompt: "", 
@@ -40,6 +43,17 @@ export default function Home() {
   }])
   const [isUpdatingEnv, setIsUpdatingEnv] = useState(false)
   
+  // Load initial values from localStorage
+  useEffect(() => {
+    const savedEnvVars = localStorage.getItem('envVars')
+    const shouldSave = localStorage.getItem('saveEnvVars') === 'true'
+    
+    if (savedEnvVars && shouldSave) {
+      setEnvVars(savedEnvVars)
+    }
+    setSaveToStorage(shouldSave)
+  }, [])
+
   const handleUpdateEnv = async () => {
     try {
       setIsUpdatingEnv(true)
@@ -135,6 +149,25 @@ export default function Home() {
     setTestCases(updatedTestCases)
   }
 
+  // Handle save toggle
+  const handleSaveToggle = (checked: boolean) => {
+    setSaveToStorage(checked)
+    localStorage.setItem('saveEnvVars', String(checked))
+    if (checked) {
+      localStorage.setItem('envVars', envVars)
+    } else {
+      localStorage.removeItem('envVars')
+    }
+  }
+
+  // Handle env vars change
+  const handleEnvVarsChange = (value: string) => {
+    setEnvVars(value)
+    if (saveToStorage) {
+      localStorage.setItem('envVars', value)
+    }
+  }
+
   return (
     <main className="container mx-auto p-4">
       <Tabs defaultValue="env" className="max-w-4xl mx-auto">
@@ -151,10 +184,23 @@ export default function Home() {
             <CardContent className="space-y-4">
               <Textarea
                 value={envVars}
-                onChange={(e) => setEnvVars(e.target.value)}
+                onChange={(e) => handleEnvVarsChange(e.target.value)}
                 placeholder="Enter environment variables (one per line):&#10;OPENAI_API_KEY=sk-...&#10;ANTHROPIC_API_KEY=sk-..."
                 className="min-h-[200px] font-mono"
               />
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="saveEnv" 
+                  checked={saveToStorage}
+                  onCheckedChange={handleSaveToggle}
+                />
+                <Label 
+                  htmlFor="saveEnv" 
+                  className="text-sm text-muted-foreground cursor-pointer"
+                >
+                  Save ENV in LocalStorage
+                </Label>
+              </div>
               <Button 
                 onClick={handleUpdateEnv} 
                 className="w-full"
