@@ -1,0 +1,9 @@
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "1905:1905"
+    environment:
+      - PORT=1905
+      - NEXT_PUBLIC_API_URL=http://localhost:1905/api 
