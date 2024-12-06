@@ -1,4 +1,5 @@
 import os
+import time
 from typing import Literal, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -17,6 +18,7 @@ class CompletionUsage(BaseModel):
     completion_tokens: int = Field(..., description="Number of tokens in the completion")
     total_tokens: int = Field(..., description="Total tokens used")
     cost: float = Field(..., description="Cost of the completion")
+    latency: float = Field(..., description="Response time in seconds")
 
 class CompletionResponseContent(BaseModel):
     response_content: str = Field(..., description="Model's response text")
@@ -50,24 +52,31 @@ async def create_completion(model_name: str, request: CompletionRequest) -> Comp
     Raises:
         HTTPException: If there's an error with the model or request
     """
-    messages = []
-    if request.system_prompt:
-        messages.append({"role": "system", "content": request.system_prompt})
-    messages.append({"role": "user", "content": request.user_prompt})
-    response = completion(
-        model=model_name,
-        messages=messages
-    )
-      
-    return CompletionResponse(
-        response=CompletionResponseContent(
-            response_content=response.choices[0].message.content,
-            model_name=model_name,
-            usage=CompletionUsage(
-                prompt_tokens=response.usage.prompt_tokens,
-                completion_tokens=response.usage.completion_tokens,
-                total_tokens=response.usage.total_tokens,
-                cost=response._hidden_params["response_cost"]
+    try:
+        start_time = time.time()
+        
+        response = completion(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": request.system_prompt} if request.system_prompt else None,
+                {"role": "user", "content": request.user_prompt}
+            ]
+        )
+        
+        latency = time.time() - start_time
+        
+        return CompletionResponse(
+            response=CompletionResponseContent(
+                response_content=response.choices[0].message.content,
+                model_name=model_name,
+                usage=CompletionUsage(
+                    prompt_tokens=response.usage.prompt_tokens,
+                    completion_tokens=response.usage.completion_tokens,
+                    total_tokens=response.usage.total_tokens,
+                    cost=response._hidden_params["response_cost"],
+                    latency=latency
+                )
             )
         )
-    )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

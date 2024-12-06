@@ -20,6 +20,7 @@ interface ResponseMetrics {
     completion_tokens: number;
     total_tokens: number;
     cost: number;
+    latency: number;
   };
 }
 
@@ -113,7 +114,7 @@ export default function Home() {
               `Error: ${error.message}` : 
               "Error: Failed to get response",
             model_name: model,
-            usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost: 0 }
+            usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost: 0, latency: 0 }
           }
         }
       }
@@ -315,6 +316,7 @@ export default function Home() {
                                 <span>Prompt Tokens: {response.usage.prompt_tokens}</span>
                                 <span>Completion Tokens: {response.usage.completion_tokens}</span>
                                 <span>Total Tokens: {response.usage.total_tokens}</span>
+                                <span>Latency: {response.usage.latency.toFixed(2)}s</span>
                               </div>
                             </CardHeader>
                             <CardContent className="h-[500px] overflow-y-auto">
