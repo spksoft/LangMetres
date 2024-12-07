@@ -62,6 +62,35 @@ export default function Home() {
   }])
   const [isUpdatingEnv, setIsUpdatingEnv] = useState(false)
   
+  // Load all data from localStorage
+  useEffect(() => {
+    const savedData = localStorage.getItem('modelEvalData')
+    if (savedData) {
+      const data = JSON.parse(savedData)
+      setSelectedModels(data.selectedModels ?? [])
+      setModelConfigs(data.modelConfigs ?? {})
+      setTestCases(data.testCases ?? [{ 
+        prompt: "", 
+        responses: {}, 
+        loading: false,
+        viewMode: {},
+      }])
+    }
+  }, [])
+
+  // Save all data to localStorage whenever it changes
+  useEffect(() => {
+    const dataToSave = {
+      selectedModels,
+      modelConfigs,
+      testCases: testCases.map(tc => ({
+        ...tc,
+        loading: false // Don't save loading state
+      }))
+    }
+    localStorage.setItem('modelEvalData', JSON.stringify(dataToSave))
+  }, [selectedModels, modelConfigs, testCases])
+
   // Load initial values from localStorage
   useEffect(() => {
     const savedEnvVars = localStorage.getItem('envVars')
