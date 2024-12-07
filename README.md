@@ -4,7 +4,7 @@ LangMetres is a web application that provides a unified interface for interactin
 
 ## Version
 
-0.1.0-alpha.1
+0.1.0-alpha.2
 
 ## Features
 
