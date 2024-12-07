@@ -5,7 +5,9 @@ interface EnvVarsRequest {
 }
 
 interface CompletionRequest {
-  user_prompt: string
+  user_prompt: string;
+  temperature?: number;
+  top_p?: number;
 }
 
 const baseUrl = 'http://127.0.0.1:8000'

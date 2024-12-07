@@ -12,6 +12,18 @@ class CompletionRequest(BaseModel):
         description="System instructions for the model"
     )
     user_prompt: str = Field(..., description="User input to process")
+    temperature: Optional[float] = Field(
+        default=0.7,
+        ge=0,
+        le=2,
+        description="Sampling temperature between 0 and 2"
+    )
+    top_p: Optional[float] = Field(
+        default=1,
+        ge=0,
+        le=1,
+        description="Nucleus sampling threshold between 0 and 1"
+    )
 
 class CompletionUsage(BaseModel):
     prompt_tokens: int = Field(..., description="Number of tokens in the prompt")
@@ -60,7 +72,9 @@ async def create_completion(model_name: str, request: CompletionRequest) -> Comp
             messages=[
                 {"role": "system", "content": request.system_prompt} if request.system_prompt else None,
                 {"role": "user", "content": request.user_prompt}
-            ]
+            ],
+            temperature=request.temperature,
+            top_p=request.top_p
         )
         
         latency = time.time() - start_time

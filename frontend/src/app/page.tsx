@@ -33,6 +33,11 @@ interface TestCase {
   viewMode?: Record<string, 'markdown' | 'raw'>;
 }
 
+interface ModelConfig {
+  temperature: number;
+  top_p: number;
+}
+
 interface ModelPriceEntry {
   mode: string;
   input_cost_per_token: number;
@@ -48,11 +53,12 @@ export default function Home() {
   const [envVars, setEnvVars] = useState("")
   const [saveToStorage, setSaveToStorage] = useState(false)
   const [selectedModels, setSelectedModels] = useState<string[]>([])
+  const [modelConfigs, setModelConfigs] = useState<Record<string, ModelConfig>>({})
   const [testCases, setTestCases] = useState<TestCase[]>([{ 
     prompt: "", 
     responses: {}, 
     loading: false,
-    viewMode: {} 
+    viewMode: {},
   }])
   const [isUpdatingEnv, setIsUpdatingEnv] = useState(false)
   
@@ -100,34 +106,59 @@ export default function Home() {
 
   const handleRunTest = async (index: number) => {
     const testCase = testCases[index]
-    const newResponses: Record<string, ResponseMetrics> = {}
     
     try {
       const updatedTestCases = [...testCases]
       updatedTestCases[index].loading = true
       setTestCases(updatedTestCases)
 
-      for (const model of selectedModels) {
+      // Create array of promises for each model
+      const promises = selectedModels.map(async (model) => {
         try {
           const data = await createCompletion(model, {
-            user_prompt: testCase.prompt
+            user_prompt: testCase.prompt,
+            temperature: modelConfigs[model]?.temperature ?? 0.7,
+            top_p: modelConfigs[model]?.top_p ?? 1
           })
-          newResponses[model] = data.response
-        } catch (error) {
-          newResponses[model] = {
-            response_content: error instanceof Error ? 
-              `Error: ${error.message}` : 
-              "Error: Failed to get response",
-            model_name: model,
-            usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost: 0, latency: 0 }
-          }
-        }
-      }
+          
+          // Update responses immediately when each completion finishes
+          setTestCases(prev => {
+            const updated = [...prev]
+            updated[index].responses = {
+              ...updated[index].responses,
+              [model]: data.response
+            }
+            return updated
+          })
 
-      updatedTestCases[index].responses = newResponses
-      updatedTestCases[index].loading = false
-      setTestCases(updatedTestCases)
+        } catch (error) {
+          // Handle individual model errors
+          setTestCases(prev => {
+            const updated = [...prev]
+            updated[index].responses = {
+              ...updated[index].responses,
+              [model]: {
+                response_content: error instanceof Error ? 
+                  `Error: ${error.message}` : 
+                  "Error: Failed to get response",
+                model_name: model,
+                usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost: 0, latency: 0 }
+              }
+            }
+            return updated
+          })
+        }
+      })
+
+      // Wait for all completions but don't block UI updates
+      await Promise.all(promises)
       
+      setTestCases(prev => {
+        const updated = [...prev]
+        updated[index].loading = false
+        return updated
+      })
+
       toast({
         title: "Success",
         description: "Test completed successfully",
@@ -139,9 +170,11 @@ export default function Home() {
         description: error instanceof Error ? error.message : "An unknown error occurred",
       })
       
-      const updatedTestCases = [...testCases]
-      updatedTestCases[index].loading = false
-      setTestCases(updatedTestCases)
+      setTestCases(prev => {
+        const updated = [...prev]
+        updated[index].loading = false
+        return updated
+      })
     }
   }
 
@@ -261,18 +294,68 @@ export default function Home() {
                 </Select>
                 <div className="flex gap-2 mt-2 overflow-x-auto pb-2 no-wrap">
                   {selectedModels.map((model) => (
-                    <Button
-                      key={model}
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => 
-                        setSelectedModels(prev => 
-                          prev.filter(m => m !== model)
-                        )
-                      }
-                    >
-                      {model} ×
-                    </Button>
+                    <div key={model} className="flex flex-col gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedModels(prev => prev.filter(m => m !== model))
+                          setModelConfigs(prev => {
+                            const next = { ...prev }
+                            delete next[model]
+                            return next
+                          })
+                        }}
+                      >
+                        {model} ×
+                      </Button>
+                      <div className="space-y-2">
+                        <Label>Temperature</Label>
+                        <input 
+                          type="range"
+                          min="0"
+                          max="2"
+                          step="0.1"
+                          value={modelConfigs[model]?.temperature ?? 0.7}
+                          onChange={(e) => {
+                            setModelConfigs(prev => ({
+                              ...prev,
+                              [model]: {
+                                ...prev[model],
+                                temperature: Number(e.target.value)
+                              }
+                            }))
+                          }}
+                          className="w-full"
+                        />
+                        <div className="text-xs text-muted-foreground text-center">
+                          {modelConfigs[model]?.temperature ?? 0.7}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Top P</Label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.1"
+                          value={modelConfigs[model]?.top_p ?? 1}
+                          onChange={(e) => {
+                            setModelConfigs(prev => ({
+                              ...prev,
+                              [model]: {
+                                ...prev[model],
+                                top_p: Number(e.target.value)
+                              }
+                            }))
+                          }}
+                          className="w-full"
+                        />
+                        <div className="text-xs text-muted-foreground text-center">
+                          {modelConfigs[model]?.top_p ?? 1}
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
