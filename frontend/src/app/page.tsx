@@ -256,6 +256,17 @@ export default function Home() {
           <Card>
             <CardHeader>
               <CardTitle>Environment Variables</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Environment Variables config can see from{" "}
+                <a 
+                  href="https://docs.litellm.ai/docs/providers/" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  LiteLLM Document
+                </a>
+              </p>
             </CardHeader>
             <CardContent className="space-y-4">
               <Textarea
@@ -487,6 +498,17 @@ export default function Home() {
           </Card>
         </TabsContent>
       </Tabs>
+      <footer className="text-center mt-8 text-sm text-muted-foreground">
+        Made with ❤️ and 🤖 by{" "}
+        <a 
+          href="https://github.com/spksoft" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+        >
+          @spksoft
+        </a>
+      </footer>
     </main>
   )
 }
