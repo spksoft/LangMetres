@@ -11,6 +11,7 @@ import { Loader2, Eye, FileText } from "lucide-react"
 import ReactMarkdown from 'react-markdown'
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { updateEnvironmentVariables, createCompletion } from './actions'
 
 interface ResponseMetrics {
   response_content: string;
@@ -65,11 +66,7 @@ export default function Home() {
           .map(([key, value]) => [key.trim(), value?.trim()])
       )
 
-      await fetch("http://localhost:8000/envs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ variables })
-      })
+      await updateEnvironmentVariables({ variables })
       
       toast({
         title: "Success",
@@ -77,7 +74,7 @@ export default function Home() {
       })
     } catch (error) {
       toast({
-        variant: "destructive",
+        variant: "destructive", 
         title: "Error",
         description: error instanceof Error ? error.message : "An unknown error occurred",
       })
@@ -101,12 +98,9 @@ export default function Home() {
 
       for (const model of selectedModels) {
         try {
-          const res = await fetch(`http://localhost:8000/completions/${model}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_prompt: testCase.prompt })
+          const data = await createCompletion(model, {
+            user_prompt: testCase.prompt
           })
-          const data = await res.json()
           newResponses[model] = data.response
         } catch (error) {
           newResponses[model] = {
@@ -130,7 +124,7 @@ export default function Home() {
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Error",
+        title: "Error", 
         description: error instanceof Error ? error.message : "An unknown error occurred",
       })
       
