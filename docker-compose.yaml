@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "1905:1905"
+    environment:
+      - NODE_ENV=production
+      - POETRY_VIRTUALENVS_CREATE=true
+      - POETRY_VIRTUALENVS_IN_PROJECT=true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:1905"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
