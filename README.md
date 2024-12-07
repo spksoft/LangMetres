@@ -23,7 +23,7 @@ https://github.com/user-attachments/assets/a601e609-e1dc-462a-8802-558f397437e8
 The easiest way to run LangMetres is using Docker:
 
 ```bash
-docker run -p 1905:1905 spksoft/langmetres:latest
+docker run -it --rm --name langmetres -p 1905:1905 spksoft/langmetres:latest
 ```
 
 Then visit `http://localhost:1905` in your browser.
