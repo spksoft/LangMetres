@@ -1,53 +1,19 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Eye, FileText } from "lucide-react"
-import ReactMarkdown from 'react-markdown'
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
 import { updateEnvironmentVariables, createCompletion } from './actions'
 import modelPrice from '@/assets/litellm-1-53-7_model_price.json'
-import { cn } from "@/lib/utils"
-
-interface ResponseMetrics {
-  response_content: string;
-  model_name: string;
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-    cost: number;
-    latency: number;
-  };
-}
-
-interface TestCase {
-  prompt: string;
-  responses: Record<string, ResponseMetrics>;
-  loading?: boolean;
-  viewMode?: Record<string, 'markdown' | 'raw'>;
-}
-
-interface ModelConfig {
-  temperature: number;
-  top_p: number;
-}
-
-interface ModelPriceEntry {
-  mode: string;
-  input_cost_per_token: number;
-  output_cost_per_token: number;
-  tokens_per_dollar?: {
-    input_tokens: number;
-    output_tokens: number;
-  };
-}
+import { TestCase, ModelConfig, ModelPriceEntry } from "@/types"
+import { ModelSelector } from "@/components/model-selection/model-selector"
+import { exportToExcel } from "@/lib/export"
+import { EnvSettings } from "@/components/env-settings/env-settings"
+import { TestCaseList } from "@/components/test-case/test-case-list"
+import { Footer } from "@/components/layout/footer"
+import { importFromExcel } from "@/lib/import"
 
 export default function Home() {
   const { toast } = useToast()
@@ -56,6 +22,7 @@ export default function Home() {
   const [selectedModels, setSelectedModels] = useState<string[]>([])
   const [modelConfigs, setModelConfigs] = useState<Record<string, ModelConfig>>({})
   const [testCases, setTestCases] = useState<TestCase[]>([{ 
+    name: "Test Case 1",
     prompt: "", 
     responses: {}, 
     loading: false,
@@ -70,12 +37,18 @@ export default function Home() {
       const data = JSON.parse(savedData)
       setSelectedModels(data.selectedModels ?? [])
       setModelConfigs(data.modelConfigs ?? {})
-      setTestCases(data.testCases ?? [{ 
-        prompt: "", 
-        responses: {}, 
-        loading: false,
-        viewMode: {},
-      }])
+      setTestCases(
+        data.testCases?.map((tc: TestCase, index: number) => ({
+          ...tc,
+          name: tc.name || `Test Case ${index + 1}`
+        })) ?? [{ 
+          name: "Test Case 1",
+          prompt: "", 
+          responses: {}, 
+          loading: false,
+          viewMode: {},
+        }]
+      )
     }
   }, [])
 
@@ -131,7 +104,13 @@ export default function Home() {
   }
 
   const handleAddTestCase = () => {
-    setTestCases([...testCases, { prompt: "", responses: {}, loading: false, viewMode: {} }])
+    setTestCases([...testCases, { 
+      name: `Test Case ${testCases.length + 1}`,
+      prompt: "", 
+      responses: {}, 
+      loading: false, 
+      viewMode: {} 
+    }])
   }
 
   const handleRunTest = async (index: number) => {
@@ -157,7 +136,10 @@ export default function Home() {
             const updated = [...prev]
             updated[index].responses = {
               ...updated[index].responses,
-              [model]: data.response
+              [model]: {
+                ...data.response,
+                passed: false
+              }
             }
             return updated
           })
@@ -247,6 +229,48 @@ export default function Home() {
     .map(([key]) => key)
     .sort((a, b) => a.localeCompare(b))
 
+  const handlePassChange = (testCaseIndex: number, model: string, passed: boolean) => {
+    setTestCases(prev => {
+      const updated = [...prev]
+      if (updated[testCaseIndex].responses[model]) {
+        updated[testCaseIndex].responses[model].passed = passed
+      }
+      return updated
+    })
+  }
+
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      const importedTestCases = await importFromExcel(file)
+      
+      // Get all unique models from imported test cases
+      const models = new Set<string>()
+      importedTestCases.forEach(tc => {
+        Object.keys(tc.responses).forEach(model => models.add(model))
+      })
+
+      setSelectedModels(Array.from(models))
+      setTestCases(importedTestCases)
+      
+      toast({
+        title: "Success",
+        description: "Test cases imported successfully",
+      })
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to import file",
+      })
+    }
+
+    // Reset input
+    event.target.value = ''
+  }
+
   return (
     <main className="container mx-auto p-4">
       <Tabs defaultValue="env" className="max-w-4xl mx-auto">
@@ -256,75 +280,24 @@ export default function Home() {
         </TabsList>
 
         <TabsContent value="env">
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>Environment Variables</CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    localStorage.removeItem('envVars')
-                    localStorage.removeItem('saveEnvVars')
-                    setEnvVars('')
-                    setSaveToStorage(false)
-                    toast({
-                      title: "Reset Complete",
-                      description: "Environment variables have been cleared",
-                    })
-                  }}
-                >
-                  Reset Storage
-                </Button>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Environment Variables config can see from{" "}
-                <a 
-                  href="https://docs.litellm.ai/docs/providers/" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline"
-                >
-                  LiteLLM Document
-                </a>
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Textarea
-                value={envVars}
-                onChange={(e) => handleEnvVarsChange(e.target.value)}
-                placeholder="Enter environment variables (one per line):&#10;OPENAI_API_KEY=sk-...&#10;ANTHROPIC_API_KEY=sk-..."
-                className="min-h-[200px] font-mono"
-              />
-              <div className="flex items-center space-x-2">
-                <Checkbox 
-                  id="saveEnv" 
-                  checked={saveToStorage}
-                  onCheckedChange={handleSaveToggle}
-                />
-                <Label 
-                  htmlFor="saveEnv" 
-                  className="text-sm text-muted-foreground cursor-pointer"
-                >
-                  Save ENV in LocalStorage
-                </Label>
-              </div>
-              <Button 
-                onClick={handleUpdateEnv} 
-                className="w-full"
-                disabled={isUpdatingEnv}
-              >
-                {isUpdatingEnv ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Updating...
-                  </>
-                ) : (
-                  "Update Environment"
-                )}
-              </Button>
-            </CardContent>
-          </Card>
+          <EnvSettings
+            envVars={envVars}
+            saveToStorage={saveToStorage}
+            isUpdating={isUpdatingEnv}
+            onEnvChange={handleEnvVarsChange}
+            onSaveToggle={handleSaveToggle}
+            onUpdate={handleUpdateEnv}
+            onReset={() => {
+              localStorage.removeItem('envVars')
+              localStorage.removeItem('saveEnvVars')
+              setEnvVars('')
+              setSaveToStorage(false)
+              toast({
+                title: "Reset Complete",
+                description: "Environment variables have been cleared",
+              })
+            }}
+          />
         </TabsContent>
 
         <TabsContent value="eval">
@@ -332,236 +305,114 @@ export default function Home() {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle>Model Evaluation</CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    localStorage.removeItem('modelEvalData')
-                    setSelectedModels([])
-                    setModelConfigs({})
-                    setTestCases([{ 
-                      prompt: "", 
-                      responses: {}, 
-                      loading: false,
-                      viewMode: {},
-                    }])
-                    toast({
-                      title: "Reset Complete",
-                      description: "Model evaluation data has been cleared",
-                    })
-                  }}
-                >
-                  Reset Storage
-                </Button>
+                <div className="flex gap-2">
+                  <input
+                    type="file"
+                    accept=".xlsx"
+                    className="hidden"
+                    id="import-excel"
+                    onChange={handleImport}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => document.getElementById('import-excel')?.click()}
+                  >
+                    Import Results
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => exportToExcel(testCases)}
+                    disabled={Object.keys(testCases[0].responses).length === 0}
+                  >
+                    Export Results
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      localStorage.removeItem('modelEvalData')
+                      setSelectedModels([])
+                      setModelConfigs({})
+                      setTestCases([{ 
+                        name: "Test Case 1",
+                        prompt: "", 
+                        responses: {}, 
+                        loading: false,
+                        viewMode: {},
+                      }])
+                      toast({
+                        title: "Reset Complete",
+                        description: "Model evaluation data has been cleared",
+                      })
+                    }}
+                  >
+                    Reset Storage
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <label>Select Models to Test</label>
-                <Select
-                  onValueChange={(value) => {
-                    if (!selectedModels.includes(value)) {
-                      setSelectedModels(prev => [...prev, value])
+              <ModelSelector
+                availableModels={availableChatModels}
+                selectedModels={selectedModels}
+                modelConfigs={modelConfigs}
+                onModelSelect={(value) => {
+                  if (!selectedModels.includes(value)) {
+                    setSelectedModels(prev => [...prev, value])
+                  }
+                }}
+                onModelRemove={(model) => {
+                  setSelectedModels(prev => prev.filter(m => m !== model))
+                  setModelConfigs(prev => {
+                    const next = { ...prev }
+                    delete next[model]
+                    return next
+                  })
+                  setTestCases(prev => prev.map(testCase => ({
+                    ...testCase,
+                    responses: Object.fromEntries(
+                      Object.entries(testCase.responses)
+                        .filter(([key]) => key !== model)
+                    )
+                  })))
+                }}
+                onConfigChange={(model, config) => {
+                  setModelConfigs(prev => ({
+                    ...prev,
+                    [model]: {
+                      ...prev[model],
+                      ...config
                     }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Add model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {availableChatModels.map((modelId) => (
-                        <SelectItem key={modelId} value={modelId}>
-                          {modelId}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                <div className="flex gap-2 mt-2 overflow-x-auto pb-2 no-wrap">
-                  {selectedModels.map((model) => (
-                    <div key={model} className="flex flex-col gap-2">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedModels(prev => prev.filter(m => m !== model))
-                          setModelConfigs(prev => {
-                            const next = { ...prev }
-                            delete next[model]
-                            return next
-                          })
-                          setTestCases(prev => prev.map(testCase => ({
-                            ...testCase,
-                            responses: Object.fromEntries(
-                              Object.entries(testCase.responses)
-                                .filter(([key]) => key !== model)
-                            )
-                          })))
-                        }}
-                      >
-                        {model} ×
-                      </Button>
-                      <div className="space-y-2">
-                        <Label>Temperature</Label>
-                        <input 
-                          type="range"
-                          min="0"
-                          max="2"
-                          step="0.1"
-                          value={modelConfigs[model]?.temperature ?? 0.7}
-                          onChange={(e) => {
-                            setModelConfigs(prev => ({
-                              ...prev,
-                              [model]: {
-                                ...prev[model],
-                                temperature: Number(e.target.value)
-                              }
-                            }))
-                          }}
-                          className="w-full"
-                        />
-                        <div className="text-xs text-muted-foreground text-center">
-                          {modelConfigs[model]?.temperature ?? 0.7}
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Top P</Label>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.1"
-                          value={modelConfigs[model]?.top_p ?? 1}
-                          onChange={(e) => {
-                            setModelConfigs(prev => ({
-                              ...prev,
-                              [model]: {
-                                ...prev[model],
-                                top_p: Number(e.target.value)
-                              }
-                            }))
-                          }}
-                          className="w-full"
-                        />
-                        <div className="text-xs text-muted-foreground text-center">
-                          {modelConfigs[model]?.top_p ?? 1}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                  }))
+                }}
+              />
 
-              <div className="space-y-4">
-                {testCases.map((testCase, index) => (
-                  <Card key={index} className="w-full">
-                    <CardContent className="pt-6 space-y-4">
-                      <div className="flex justify-end">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-muted-foreground hover:text-destructive"
-                          onClick={() => setTestCases(prev => prev.filter((_, i) => i !== index))}
-                          disabled={testCases.length === 1}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                      <Textarea
-                        value={testCase.prompt}
-                        onChange={(e) => {
-                          const updated = [...testCases]
-                          updated[index].prompt = e.target.value
-                          setTestCases(updated)
-                        }}
-                        placeholder="Enter test prompt"
-                      />
-                      <Button 
-                        onClick={() => handleRunTest(index)}
-                        disabled={selectedModels.length === 0 || testCase.loading}
-                      >
-                        {testCase.loading ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Running...
-                          </>
-                        ) : (
-                          "Run Test"
-                        )}
-                      </Button>
-                      <div className="flex gap-4 overflow-x-auto pb-4">
-                        {Object.entries(testCase.responses as Record<string, ResponseMetrics>).map(([model, response]) => (
-                          <Card key={model} className="h-full min-w-[320px]">
-                            <CardHeader className="pb-2">
-                              <CardTitle className="text-sm flex items-center justify-between">
-                                <span>{model}</span>
-                                <div className="flex items-center gap-2">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
-                                    onClick={() => toggleView(index, model)}
-                                  >
-                                    {testCase.viewMode?.[model] === 'raw' ? (
-                                      <FileText className="h-4 w-4" />
-                                    ) : (
-                                      <Eye className="h-4 w-4" />
-                                    )}
-                                  </Button>
-                                  <span className="text-xs text-muted-foreground">
-                                    ${response.usage.cost.toFixed(4)}
-                                  </span>
-                                </div>
-                              </CardTitle>
-                              <div className="text-xs text-muted-foreground flex flex-col">
-                                <span>Prompt Tokens: {response.usage.prompt_tokens}</span>
-                                <span>Completion Tokens: {response.usage.completion_tokens}</span>
-                                <span>Total Tokens: {response.usage.total_tokens}</span>
-                                <span>Latency: {response.usage.latency.toFixed(2)}s</span>
-                              </div>
-                            </CardHeader>
-                            <CardContent className="h-[500px] overflow-y-auto">
-                              <p>Response: </p>
-                              {testCase.viewMode?.[model] === 'raw' ? (
-                                <pre className="whitespace-pre-wrap font-mono text-sm">
-                                  {response.response_content}
-                                </pre>
-                              ) : (
-                                <div className="prose prose-sm dark:prose-invert max-w-none">
-                                  <ReactMarkdown>{response.response_content}</ReactMarkdown>
-                                </div>
-                              )}
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-                <Button 
-                  onClick={handleAddTestCase}
-                  variant="outline"
-                  className="w-full"
-                >
-                  Add Test Case
-                </Button>
-              </div>
+              <TestCaseList
+                testCases={testCases}
+                selectedModels={selectedModels}
+                onDelete={(index) => setTestCases(prev => prev.filter((_, i) => i !== index))}
+                onNameChange={(index, name) => {
+                  const updated = [...testCases]
+                  updated[index].name = name
+                  setTestCases(updated)
+                }}
+                onPromptChange={(index, prompt) => {
+                  const updated = [...testCases]
+                  updated[index].prompt = prompt
+                  setTestCases(updated)
+                }}
+                onRun={handleRunTest}
+                onToggleView={toggleView}
+                onAdd={handleAddTestCase}
+                onPassChange={handlePassChange}
+              />
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
-      <footer className="text-center mt-8 text-sm text-muted-foreground">
-        Made with ❤️ and 🤖 by{" "}
-        <a 
-          href="https://github.com/spksoft" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="text-primary hover:underline"
-        >
-          @spksoft
-        </a>
-      </footer>
+      <Footer />
     </main>
   )
 }
