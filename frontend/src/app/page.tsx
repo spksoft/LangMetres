@@ -12,6 +12,7 @@ import ReactMarkdown from 'react-markdown'
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { updateEnvironmentVariables, createCompletion } from './actions'
+import modelPrice from '@/assets/litellm-1-53-7_model_price.json'
 
 interface ResponseMetrics {
   response_content: string;
@@ -30,6 +31,16 @@ interface TestCase {
   responses: Record<string, ResponseMetrics>;
   loading?: boolean;
   viewMode?: Record<string, 'markdown' | 'raw'>;
+}
+
+interface ModelPriceEntry {
+  mode: string;
+  input_cost_per_token: number;
+  output_cost_per_token: number;
+  tokens_per_dollar?: {
+    input_tokens: number;
+    output_tokens: number;
+  };
 }
 
 export default function Home() {
@@ -163,6 +174,14 @@ export default function Home() {
     }
   }
 
+  const availableChatModels = Object.entries(modelPrice as unknown as Record<string, ModelPriceEntry>)
+    .filter(([, value]) => 
+      value.mode === 'chat' && 
+      'input_cost_per_token' in value && 
+      'output_cost_per_token' in value
+    )
+    .map(([key]) => key)
+
   return (
     <main className="container mx-auto p-4">
       <Tabs defaultValue="env" className="max-w-4xl mx-auto">
@@ -233,12 +252,14 @@ export default function Home() {
                     <SelectValue placeholder="Add model" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gpt-3.5-turbo">GPT-3.5 Turbo</SelectItem>
-                    <SelectItem value="gpt-4">GPT-4</SelectItem>
-                    <SelectItem value="claude-3-opus">Claude 3 Opus</SelectItem>
+                    {availableChatModels.map((modelId) => (
+                      <SelectItem key={modelId} value={modelId}>
+                        {modelId}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="flex gap-2 mt-2 overflow-x-auto pb-2 no-wrap">
                   {selectedModels.map((model) => (
                     <Button
                       key={model}
@@ -260,6 +281,17 @@ export default function Home() {
                 {testCases.map((testCase, index) => (
                   <Card key={index} className="w-full">
                     <CardContent className="pt-6 space-y-4">
+                      <div className="flex justify-end">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={() => setTestCases(prev => prev.filter((_, i) => i !== index))}
+                          disabled={testCases.length === 1}
+                        >
+                          Delete
+                        </Button>
+                      </div>
                       <Textarea
                         value={testCase.prompt}
                         onChange={(e) => {
@@ -282,9 +314,9 @@ export default function Home() {
                           "Run Test"
                         )}
                       </Button>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div className="flex gap-4 overflow-x-auto pb-4">
                         {Object.entries(testCase.responses as Record<string, ResponseMetrics>).map(([model, response]) => (
-                          <Card key={model} className="h-full">
+                          <Card key={model} className="h-full min-w-[320px]">
                             <CardHeader className="pb-2">
                               <CardTitle className="text-sm flex items-center justify-between">
                                 <span>{model}</span>
