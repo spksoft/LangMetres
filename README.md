@@ -2,7 +2,8 @@
 
 LangMetres is a powerful web application for evaluating and comparing different language models. It provides a unified interface for testing multiple models simultaneously while tracking costs, tokens, and performance metrics. Thank to  [LiteLLM](https://github.com/BerriAI/litellm), it supports a wide range of LLM providers.
 
-<img width="605" alt="LangMetres Screenshot" src="https://github.com/user-attachments/assets/cf5cbb62-6768-42f6-914b-30f5fb59e07b">
+
+https://github.com/user-attachments/assets/a601e609-e1dc-462a-8802-558f397437e8
 
 ## Features ✨
 
