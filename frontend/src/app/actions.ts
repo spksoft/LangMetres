@@ -5,6 +5,7 @@ interface EnvVarsRequest {
 }
 
 interface CompletionRequest {
+  model: string;
   user_prompt: string;
   temperature?: number;
   top_p?: number;
@@ -29,12 +30,15 @@ export async function updateEnvironmentVariables(variables: EnvVarsRequest) {
 }
 
 export async function createCompletion(model: string, request: CompletionRequest) {
-  const response = await fetch(`${baseUrl}/completions/${model}`, {
+  const response = await fetch(`${baseUrl}/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(request)
+    body: JSON.stringify({
+      ...request,
+      model
+    })
   })
 
   if (!response.ok) {

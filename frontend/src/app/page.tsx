@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, Eye, FileText } from "lucide-react"
 import ReactMarkdown from 'react-markdown'
@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { updateEnvironmentVariables, createCompletion } from './actions'
 import modelPrice from '@/assets/litellm-1-53-7_model_price.json'
+import { cn } from "@/lib/utils"
 
 interface ResponseMetrics {
   response_content: string;
@@ -145,6 +146,7 @@ export default function Home() {
       const promises = selectedModels.map(async (model) => {
         try {
           const data = await createCompletion(model, {
+            model,
             user_prompt: testCase.prompt,
             temperature: modelConfigs[model]?.temperature ?? 0.7,
             top_p: modelConfigs[model]?.top_p ?? 1
@@ -243,6 +245,7 @@ export default function Home() {
       'output_cost_per_token' in value
     )
     .map(([key]) => key)
+    .sort((a, b) => a.localeCompare(b))
 
   return (
     <main className="container mx-auto p-4">
@@ -255,7 +258,25 @@ export default function Home() {
         <TabsContent value="env">
           <Card>
             <CardHeader>
-              <CardTitle>Environment Variables</CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle>Environment Variables</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    localStorage.removeItem('envVars')
+                    localStorage.removeItem('saveEnvVars')
+                    setEnvVars('')
+                    setSaveToStorage(false)
+                    toast({
+                      title: "Reset Complete",
+                      description: "Environment variables have been cleared",
+                    })
+                  }}
+                >
+                  Reset Storage
+                </Button>
+              </div>
               <p className="text-sm text-muted-foreground">
                 Environment Variables config can see from{" "}
                 <a 
@@ -309,27 +330,52 @@ export default function Home() {
         <TabsContent value="eval">
           <Card>
             <CardHeader>
-              <CardTitle>Model Evaluation</CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle>Model Evaluation</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    localStorage.removeItem('modelEvalData')
+                    setSelectedModels([])
+                    setModelConfigs({})
+                    setTestCases([{ 
+                      prompt: "", 
+                      responses: {}, 
+                      loading: false,
+                      viewMode: {},
+                    }])
+                    toast({
+                      title: "Reset Complete",
+                      description: "Model evaluation data has been cleared",
+                    })
+                  }}
+                >
+                  Reset Storage
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
                 <label>Select Models to Test</label>
                 <Select
-                  onValueChange={(value) => 
-                    setSelectedModels(prev => 
-                      prev.includes(value) ? prev : [...prev, value]
-                    )
-                  }
+                  onValueChange={(value) => {
+                    if (!selectedModels.includes(value)) {
+                      setSelectedModels(prev => [...prev, value])
+                    }
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Add model" />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableChatModels.map((modelId) => (
-                      <SelectItem key={modelId} value={modelId}>
-                        {modelId}
-                      </SelectItem>
-                    ))}
+                    <SelectGroup>
+                      {availableChatModels.map((modelId) => (
+                        <SelectItem key={modelId} value={modelId}>
+                          {modelId}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
                   </SelectContent>
                 </Select>
                 <div className="flex gap-2 mt-2 overflow-x-auto pb-2 no-wrap">
@@ -345,6 +391,13 @@ export default function Home() {
                             delete next[model]
                             return next
                           })
+                          setTestCases(prev => prev.map(testCase => ({
+                            ...testCase,
+                            responses: Object.fromEntries(
+                              Object.entries(testCase.responses)
+                                .filter(([key]) => key !== model)
+                            )
+                          })))
                         }}
                       >
                         {model} ×

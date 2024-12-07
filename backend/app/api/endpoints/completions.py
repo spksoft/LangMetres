@@ -7,6 +7,7 @@ from litellm import completion
 router = APIRouter()
 
 class CompletionRequest(BaseModel):
+    model: str = Field(..., description="Name of the model to use")
     system_prompt: Optional[str] = Field(
         default="You are a helpful AI assistant.",
         description="System instructions for the model"
@@ -42,7 +43,7 @@ class CompletionResponse(BaseModel):
     response: CompletionResponseContent
 
 @router.post(
-    "/{model_name}",
+    "",
     response_model=CompletionResponse,
     description="Create a completion using the specified model",
     responses={
@@ -50,12 +51,11 @@ class CompletionResponse(BaseModel):
         500: {"description": "Model error"}
     }
 )
-async def create_completion(model_name: str, request: CompletionRequest) -> CompletionResponse:
+async def create_completion(request: CompletionRequest) -> CompletionResponse:
     """
     Create a completion using the specified model.
     
     Args:
-        model_name: The name of the model to use
         request: The completion request containing prompts
         
     Returns:
@@ -68,7 +68,7 @@ async def create_completion(model_name: str, request: CompletionRequest) -> Comp
         start_time = time.time()
         
         response = completion(
-            model=model_name,
+            model=request.model,
             messages=[
                 {"role": "system", "content": request.system_prompt} if request.system_prompt else None,
                 {"role": "user", "content": request.user_prompt}
@@ -82,7 +82,7 @@ async def create_completion(model_name: str, request: CompletionRequest) -> Comp
         return CompletionResponse(
             response=CompletionResponseContent(
                 response_content=response.choices[0].message.content,
-                model_name=model_name,
+                model_name=request.model,
                 usage=CompletionUsage(
                     prompt_tokens=response.usage.prompt_tokens,
                     completion_tokens=response.usage.completion_tokens,
