@@ -8,9 +8,10 @@ LangMetres is a web application that provides a unified interface for interactin
 
 0.1.0-alpha.2
 
-## Features
+## Docker
 
-- Support for multiple language models through a unified API
-- Real-time cost and token usage tracking
-- Environment variable management for API keys
-- Simple REST API interface
+The easiest way to run LangMetres is using Docker:
+
+```bash
+docker run -it --rm --name langmetres -p 1905:1905 spksoft/langmetres:latest
+```
