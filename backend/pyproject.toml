@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "langmetres"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 description = "Large Language Model Evaluation Tool"
 authors = ["Sippakorn Raksakiart <spkrsk.37@gmail.com>"]
 packages = [
